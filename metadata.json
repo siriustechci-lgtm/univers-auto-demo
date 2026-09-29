@@ -1,0 +1,6 @@
+{
+  "name": "Sirius Auto CRM",
+  "description": "Logiciel de gestion et CRM automobile pour la gestion de flotte, ventes, locations et trésorerie de BANESERVICES AUTO.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
