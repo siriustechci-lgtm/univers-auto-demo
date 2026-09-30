@@ -3,6 +3,7 @@ import {
   Vehicle,
   Client,
   Sale,
+  Purchase,
   Rental,
   Payment,
   SaleStatus,
@@ -247,6 +248,7 @@ interface CrmContextType {
   // State (Initialized strictly empty)
   vehicles: Vehicle[];
   clients: Client[];
+  purchases: Purchase[];
   sales: Sale[];
   rentals: Rental[];
   payments: Payment[];
@@ -292,6 +294,11 @@ interface CrmContextType {
   clearAiHistory: () => void;
   updateAiSettings: (newSettings: Partial<AiSettings>) => void;
   getLiveSmartInsights: () => AiSmartInsight[];
+
+  // Purchases
+  createPurchase: (purchase: Partial<Purchase>) => Promise<void>;
+  updatePurchase: (id: string, purchase: Partial<Purchase>) => Promise<void>;
+  deletePurchase: (id: string) => Promise<void>;
 
   // Vehicles
   addVehicle: (vehicle: Omit<Vehicle, 'id' | 'createdAt'>) => Vehicle;
@@ -607,6 +614,16 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const saved = localStorage.getItem(`${STORAGE_KEY}_sales`);
       return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [purchases, setPurchases] = useState<Purchase[]>(() => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_purchases`);
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -938,6 +955,14 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error('Failed to persist sales', e);
     }
   }, [sales]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${STORAGE_KEY}_purchases`, JSON.stringify(purchases));
+    } catch (e) {
+      console.error('Failed to persist purchases', e);
+    }
+  }, [purchases]);
 
   useEffect(() => {
     try {
@@ -1802,6 +1827,65 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     })();
 
     return assistantMessage;
+  };
+
+  // Purchases Actions
+  const createPurchase = async (purchaseData: Partial<Purchase>): Promise<void> => {
+    const timestamp = new Date();
+    const purchasePrice = Number(purchaseData.purchasePrice) || 0;
+    const customsFee = Number(purchaseData.customsFee) || 0;
+    const shippingFee = Number(purchaseData.shippingFee) || 0;
+    const transportFee = Number(purchaseData.transportFee) || 0;
+    const preparationFee = Number(purchaseData.preparationFee) || 0;
+    const otherCharges = Number(purchaseData.otherCharges) || 0;
+    const purchase: Purchase = {
+      id: `purchase_${timestamp.getTime()}_${Math.random().toString(36).slice(2, 7)}`,
+      purchaseNumber: purchaseData.purchaseNumber?.trim() || `ACH-${timestamp.getFullYear()}-${String(timestamp.getTime()).slice(-4)}`,
+      date: purchaseData.date || timestamp.toISOString().slice(0, 10),
+      vehicleId: purchaseData.vehicleId,
+      vehicleInfo: purchaseData.vehicleInfo?.trim() || '',
+      supplierName: purchaseData.supplierName?.trim() || '',
+      invoiceNumber: purchaseData.invoiceNumber?.trim() || undefined,
+      purchasePrice,
+      customsFee,
+      shippingFee,
+      transportFee,
+      preparationFee,
+      otherCharges,
+      totalCost: Number(purchaseData.totalCost) || purchasePrice + customsFee + shippingFee + transportFee + preparationFee + otherCharges,
+      status: purchaseData.status || 'Arrivé / En parc',
+      paymentStatus: purchaseData.paymentStatus || 'En attente',
+      amountPaid: Number(purchaseData.amountPaid) || 0,
+      notes: purchaseData.notes?.trim() || undefined,
+      createdAt: timestamp.toISOString(),
+    };
+
+    setPurchases((previous) => [purchase, ...previous]);
+    addToast({
+      title: 'Achat enregistré',
+      message: `${purchase.purchaseNumber} a été ajouté aux approvisionnements.`,
+      type: 'success',
+    });
+  };
+
+  const updatePurchase = async (id: string, purchaseData: Partial<Purchase>): Promise<void> => {
+    setPurchases((previous) => previous.map((purchase) =>
+      purchase.id === id ? { ...purchase, ...purchaseData } : purchase
+    ));
+    addToast({
+      title: 'Achat mis à jour',
+      message: 'Les modifications ont été enregistrées avec succès.',
+      type: 'info',
+    });
+  };
+
+  const deletePurchase = async (id: string): Promise<void> => {
+    setPurchases((previous) => previous.filter((purchase) => purchase.id !== id));
+    addToast({
+      title: 'Achat supprimé',
+      message: 'L’approvisionnement a été supprimé.',
+      type: 'info',
+    });
   };
 
   // Vehicles Actions
@@ -4284,6 +4368,7 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       exportDate: new Date().toISOString(),
       vehicles,
       clients,
+      purchases,
       sales,
       rentals,
       payments,
@@ -4315,6 +4400,7 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const data = JSON.parse(jsonString);
       if (Array.isArray(data.vehicles)) setVehicles(data.vehicles);
       if (Array.isArray(data.clients)) setClients(data.clients);
+      if (Array.isArray(data.purchases)) setPurchases(data.purchases);
       if (Array.isArray(data.sales)) setSales(data.sales);
       if (Array.isArray(data.rentals)) setRentals(data.rentals);
       if (Array.isArray(data.payments)) setPayments(data.payments);
@@ -4345,6 +4431,7 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const resetAllData = () => {
     setVehicles([]);
     setClients([]);
+    setPurchases([]);
     setSales([]);
     setRentals([]);
     setPayments([]);
@@ -4358,6 +4445,7 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNotifications([]);
     localStorage.removeItem(`${STORAGE_KEY}_vehicles`);
     localStorage.removeItem(`${STORAGE_KEY}_clients`);
+    localStorage.removeItem(`${STORAGE_KEY}_purchases`);
     localStorage.removeItem(`${STORAGE_KEY}_sales`);
     localStorage.removeItem(`${STORAGE_KEY}_rentals`);
     localStorage.removeItem(`${STORAGE_KEY}_payments`);
@@ -4382,6 +4470,7 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       value={{
         vehicles,
         clients,
+        purchases,
         sales,
         rentals,
         payments,
@@ -4399,6 +4488,9 @@ export const CrmProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeTab,
         setActiveTab,
         toasts,
+        createPurchase,
+        updatePurchase,
+        deletePurchase,
         addExpense,
         updateExpense,
         deleteExpense,
