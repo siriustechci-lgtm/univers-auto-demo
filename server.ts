@@ -6,7 +6,7 @@ import { db } from './server/db';
 import { apiRouter } from './server/routes';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '15mb' }));
 
@@ -316,17 +316,26 @@ async function startServer() {
   // Initialize Database (MySQL or persistent server store)
   await db.init();
 
-  if (process.env.NODE_ENV !== 'production') {
+  const isCompiledServer = path.basename(process.argv[1] || '') === 'server.cjs';
+
+  if (process.env.NODE_ENV !== 'production' && !isCompiledServer) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.dirname(path.resolve(process.argv[1] || 'dist/server.cjs'));
+    const indexPath = path.join(distPath, 'index.html');
+
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      if (req.path.startsWith('/api/')) {
+        res.status(404).json({ error: 'Route API introuvable' });
+        return;
+      }
+
+      res.sendFile(indexPath);
     });
   }
 
